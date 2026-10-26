@@ -16,17 +16,19 @@
         <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
-    <style name="FormField" parent="Widget.Material3.TextInputLayout.OutlinedBox">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-    </style>
-
     <style name="FormDropdown" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
     </style>
 
-    <style name="ModeButton" parent="Widget.Material3.Button.OutlinedButton">
+    <!-- Non-text controls (toggle groups, static text) placed where a field would be. -->
+    <style name="FormControl">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+    </style>
+
+    <!-- One option of a two-way toggle (Female | Male, USD | KHR); the checked one is filled. -->
+    <style name="ToggleOption" parent="Widget.Material3.Button.OutlinedButton">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>

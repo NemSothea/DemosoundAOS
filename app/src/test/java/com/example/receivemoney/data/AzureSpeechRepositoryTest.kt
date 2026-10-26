@@ -79,7 +79,7 @@ class AzureSpeechRepositoryTest {
         assertEquals("audio-24khz-48kbitrate-mono-mp3", azure.lastFormat)
         assertEquals(
             "<speak version='1.0' xml:lang='km-KH'><voice name='km-KH-PisethNeural'>" +
-                "អ្នកបានទទួលប្រាក់ចំនួន មួយម៉ឺន រៀល។</voice></speak>",
+                "ទទួលបាន ១ម៉ឺន រៀល</voice></speak>",
             azure.ssml.single(),
         )
     }
@@ -88,7 +88,7 @@ class AzureSpeechRepositoryTest {
     fun `english female uses Jenny`() = runTest {
         val azure = fake()
         AzureSpeechRepository(azure, config).generate(Language.ENGLISH, Gender.FEMALE, Money.usd(575))
-        assertTrue(azure.ssml.single().contains("<voice name='en-US-JennyNeural'>You have received five dollars"))
+        assertTrue(azure.ssml.single().contains("<voice name='en-US-JennyNeural'>Received 5.75 Dollars"))
     }
 
     @Test

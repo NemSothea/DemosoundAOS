@@ -7,18 +7,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.receivemoney.BuildConfig
 import com.example.receivemoney.R
-import com.example.receivemoney.audio.AudioPlayer
-import com.example.receivemoney.data.AzureConfig
-import com.example.receivemoney.data.AzureSpeechRepository
-import com.example.receivemoney.domain.AmountParseResult
-import com.example.receivemoney.domain.AmountParser
 import com.example.receivemoney.domain.Currency
 import com.example.receivemoney.domain.Gender
 import com.example.receivemoney.domain.Language
-import com.example.receivemoney.domain.SpeechMode
-import com.example.receivemoney.speech.AzureSpeechEngine
+import com.example.receivemoney.speech.ClipEngine
+import com.example.receivemoney.speech.CompositeSpeechEngine
 import com.example.receivemoney.speech.NativeTtsEngine
 import com.example.receivemoney.speech.SpeechEngine
 import com.example.receivemoney.speech.SpeechError
@@ -32,38 +26,50 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Drives the speech engine (custom recordings with FreeSDK/Native fallback). The amount is a fixed preset per currency. */
 class ReceiveMoneyViewModel(
-    private val engines: Map<SpeechMode, SpeechEngine>,
+    private val engine: SpeechEngine,
     private val savedState: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ReceiveMoneyUiState())
+    private val _uiState = MutableStateFlow(ReceiveMoneyUiState(sources = engine.sources()))
     val uiState: StateFlow<ReceiveMoneyUiState> = _uiState.asStateFlow()
 
     private var playJob: Job? = null
     private var prepareJob: Job? = null
 
     init {
-        // Restore selections after the activity is recreated from saved state (e.g. process death),
-        // so they stay consistent with the amount text the system restores in the EditText.
+        // Restore selections after the activity is recreated from saved state (e.g. process death).
+        val sources = _uiState.value.sources
+        val restoredSource = savedState.get<String>(KEY_SOURCE)?.takeIf { id -> sources.any { it.id == id } }
         _uiState.update {
             it.copy(
+                sourceId = restoredSource,
                 language = savedState.get<String>(KEY_LANGUAGE)?.let(Language::valueOf) ?: it.language,
                 gender = savedState.get<String>(KEY_GENDER)?.let(Gender::valueOf) ?: it.gender,
-                mode = savedState.get<String>(KEY_MODE)?.let(SpeechMode::valueOf) ?: it.mode,
                 currency = savedState.get<String>(KEY_CURRENCY)?.let(Currency::valueOf) ?: it.currency,
             )
         }
-        savedState.get<String>(KEY_AMOUNT)?.let(::onAmountChanged)
+        engine.selectSource(restoredSource)
         prepareVoice()
     }
 
-    /** Warms up the selected voice in the background. Never speaks and never calls a paid service. */
+    /** Warms up the selected voice in the background. Never speaks. */
     private fun prepareVoice() {
         val state = _uiState.value
         if (state.playback is PlaybackStatus.Loading || state.playback is PlaybackStatus.Speaking) return
         prepareJob?.cancel()
-        prepareJob = viewModelScope.launch { engines[state.mode]?.prepare(state.language, state.gender) }
+        prepareJob = viewModelScope.launch { engine.prepare(state.language, state.gender) }
+    }
+
+    /** Pins a voice source; null returns to automatic selection. Stops anything currently playing. */
+    fun onSourceSelected(sourceId: String?) {
+        if (sourceId == _uiState.value.sourceId) return
+        stopPlayback()
+        savedState[KEY_SOURCE] = sourceId
+        engine.selectSource(sourceId)
+        _uiState.update { it.copy(sourceId = sourceId) }
+        prepareVoice()
     }
 
     fun onLanguageSelected(language: Language) {
@@ -78,49 +84,21 @@ class ReceiveMoneyViewModel(
         prepareVoice()
     }
 
-    /** Changing currency re-validates the current input (e.g. "5.75" is valid USD but not KHR). */
+    /** Switches the preset amount ($5 or ៛20,000). Never starts speech. */
     fun onCurrencySelected(currency: Currency) {
         savedState[KEY_CURRENCY] = currency.name
         _uiState.update { it.copy(currency = currency) }
-        onAmountChanged(_uiState.value.amountInput)
-    }
-
-    fun onAmountChanged(input: String) {
-        savedState[KEY_AMOUNT] = input
-        val parsed = AmountParser.parse(input, _uiState.value.currency)
-        _uiState.update {
-            it.copy(
-                amountInput = input,
-                amount = (parsed as? AmountParseResult.Valid)?.amount,
-                amountError = (parsed as? AmountParseResult.Invalid)?.error,
-            )
-        }
-    }
-
-    /** Selects an engine. Never starts speech; stops anything currently playing. */
-    fun onModeSelected(mode: SpeechMode) {
-        if (mode == _uiState.value.mode) return
-        stopPlayback()
-        savedState[KEY_MODE] = mode.name
-        val message = when (mode) {
-            SpeechMode.FREE -> UiMessage(R.string.mode_free_selected)
-            SpeechMode.PAID -> UiMessage(R.string.mode_paid_selected)
-        }
-        _uiState.update { it.copy(mode = mode, playback = PlaybackStatus.Idle(message)) }
-        prepareVoice()
     }
 
     fun onPlayClicked() {
         val state = _uiState.value
-        val amount = state.amount ?: return
         if (!state.canPlay) return
-        val engine = engines.getValue(state.mode)
-        val request = SpeechRequest(state.language, state.gender, amount)
+        val request = SpeechRequest(state.language, state.gender, state.amount)
 
         // Stop the previous preview (and any voice warm-up) before starting a new one.
         prepareJob?.cancel()
         playJob?.cancel()
-        engines.values.forEach { it.stop() }
+        engine.stop()
         _uiState.update { it.copy(playback = PlaybackStatus.Loading) }
 
         playJob = viewModelScope.launch {
@@ -135,14 +113,14 @@ class ReceiveMoneyViewModel(
     fun stopPlayback() {
         playJob?.cancel()
         playJob = null
-        engines.values.forEach { it.stop() }
+        engine.stop()
         if (_uiState.value.playback is PlaybackStatus.Loading || _uiState.value.playback is PlaybackStatus.Speaking) {
             _uiState.update { it.copy(playback = PlaybackStatus.Idle(UiMessage(R.string.status_stopped))) }
         }
     }
 
     override fun onCleared() {
-        engines.values.forEach { it.release() }
+        engine.release()
     }
 
     private fun SpeechOutcome.toStatus(request: SpeechRequest): PlaybackStatus = when (this) {
@@ -154,6 +132,10 @@ class ReceiveMoneyViewModel(
                 )
                 SpeechNotice.GENDER_UNAVAILABLE -> UiMessage(
                     R.string.notice_gender_unavailable,
+                    listOf(request.gender.labelRes(), request.language.labelRes()),
+                )
+                SpeechNotice.CLIPS_FALLBACK -> UiMessage(
+                    R.string.notice_clips_fallback,
                     listOf(request.gender.labelRes(), request.language.labelRes()),
                 )
                 null -> null
@@ -170,50 +152,30 @@ class ReceiveMoneyViewModel(
             SpeechError.ENGINE_INIT_TIMEOUT -> UiMessage(R.string.error_engine_init_timeout)
             SpeechError.LANGUAGE_UNSUPPORTED -> UiMessage(R.string.error_language_unsupported, listOf(language))
             SpeechError.LANGUAGE_DATA_MISSING -> UiMessage(R.string.error_language_data_missing, listOf(language))
-            SpeechError.NETWORK -> UiMessage(R.string.error_network)
-            SpeechError.AZURE_NOT_CONFIGURED -> UiMessage(R.string.error_azure_not_configured)
-            SpeechError.AZURE_AUTH_FAILED -> UiMessage(R.string.error_azure_auth_failed)
-            SpeechError.VOICE_UNAVAILABLE -> UiMessage(
-                R.string.error_voice_unavailable,
-                listOf(request.gender.labelRes(), language),
-            )
-            SpeechError.RATE_LIMITED -> UiMessage(R.string.error_rate_limited)
-            SpeechError.INVALID_REQUEST -> UiMessage(R.string.error_invalid_request)
-            SpeechError.SERVER -> UiMessage(R.string.error_server)
+            SpeechError.CLIP_MISSING -> UiMessage(R.string.error_clip_missing, listOf(request.gender.labelRes(), language))
+            // Only the native engine is used; any other failure is reported as a playback problem.
+            SpeechError.NETWORK,
+            SpeechError.AZURE_NOT_CONFIGURED,
+            SpeechError.AZURE_AUTH_FAILED,
+            SpeechError.VOICE_UNAVAILABLE,
+            SpeechError.RATE_LIMITED,
+            SpeechError.INVALID_REQUEST,
+            SpeechError.SERVER,
             SpeechError.PLAYBACK -> UiMessage(R.string.error_playback)
         }
     }
 
     companion object {
+        private const val KEY_SOURCE = "source"
         private const val KEY_LANGUAGE = "language"
         private const val KEY_GENDER = "gender"
-        private const val KEY_MODE = "mode"
         private const val KEY_CURRENCY = "currency"
-        private const val KEY_AMOUNT = "amount"
 
         val Factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY])
                 ReceiveMoneyViewModel(
-                    mapOf(
-                        SpeechMode.FREE to NativeTtsEngine(app),
-                        SpeechMode.PAID to AzureSpeechEngine(
-                            repository = AzureSpeechRepository.create(
-                                AzureConfig(
-                                    key = BuildConfig.AZURE_SPEECH_KEY,
-                                    region = BuildConfig.AZURE_SPEECH_REGION,
-                                    voices = mapOf(
-                                        (Language.ENGLISH to Gender.FEMALE) to BuildConfig.AZURE_VOICE_EN_FEMALE,
-                                        (Language.ENGLISH to Gender.MALE) to BuildConfig.AZURE_VOICE_EN_MALE,
-                                        (Language.KHMER to Gender.FEMALE) to BuildConfig.AZURE_VOICE_KM_FEMALE,
-                                        (Language.KHMER to Gender.MALE) to BuildConfig.AZURE_VOICE_KM_MALE,
-                                    ),
-                                )
-                            ),
-                            player = AudioPlayer(),
-                            cacheDir = app.cacheDir,
-                        ),
-                    ),
+                    CompositeSpeechEngine(clips = ClipEngine(app), native = NativeTtsEngine(app)),
                     createSavedStateHandle(),
                 )
             }
@@ -224,6 +186,9 @@ class ReceiveMoneyViewModel(
 fun Language.labelRes(): Int = when (this) {
     Language.KHMER -> R.string.language_khmer
     Language.ENGLISH -> R.string.language_english
+    Language.KOREAN -> R.string.language_korean
+    Language.JAPANESE -> R.string.language_japanese
+    Language.CHINESE -> R.string.language_chinese
 }
 
 fun Gender.labelRes(): Int = when (this) {

@@ -2,17 +2,16 @@ package com.example.receivemoney.ui
 
 import androidx.lifecycle.SavedStateHandle
 import com.example.receivemoney.R
-import com.example.receivemoney.domain.AmountError
+import com.example.receivemoney.domain.Currency
 import com.example.receivemoney.domain.Gender
 import com.example.receivemoney.domain.Language
-import com.example.receivemoney.domain.SpeechMode
-import com.example.receivemoney.domain.Currency
 import com.example.receivemoney.domain.Money
 import com.example.receivemoney.speech.SpeechEngine
 import com.example.receivemoney.speech.SpeechError
 import com.example.receivemoney.speech.SpeechNotice
 import com.example.receivemoney.speech.SpeechOutcome
 import com.example.receivemoney.speech.SpeechRequest
+import com.example.receivemoney.speech.VoiceSource
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,6 +22,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,6 +38,14 @@ class ReceiveMoneyViewModelTest {
         var released = false
         var cancelledCount = 0
         val prepared = mutableListOf<Pair<Language, Gender>>()
+        val selectedSources = mutableListOf<String?>()
+        val sources = listOf(VoiceSource("com.samsung.SMT", "Samsung TTS"), VoiceSource("com.google.tts", "Speech Services by Google"))
+
+        override fun sources() = sources
+
+        override fun selectSource(sourceId: String?) {
+            selectedSources += sourceId
+        }
 
         override suspend fun prepare(language: Language, gender: Gender) {
             prepared += language to gender
@@ -63,16 +71,14 @@ class ReceiveMoneyViewModelTest {
         }
     }
 
-    private lateinit var free: FakeEngine
-    private lateinit var paid: FakeEngine
+    private lateinit var engine: FakeEngine
     private lateinit var vm: ReceiveMoneyViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        free = FakeEngine()
-        paid = FakeEngine()
-        vm = ReceiveMoneyViewModel(mapOf(SpeechMode.FREE to free, SpeechMode.PAID to paid))
+        engine = FakeEngine()
+        vm = ReceiveMoneyViewModel(engine)
     }
 
     @After
@@ -81,101 +87,87 @@ class ReceiveMoneyViewModelTest {
     private val state get() = vm.uiState.value
 
     @Test
-    fun `play is disabled until amount is valid`() {
-        assertFalse(state.canPlay)
-        vm.onAmountChanged("abc")
-        assertEquals(AmountError.MALFORMED, state.amountError)
-        assertFalse(state.canPlay)
-        vm.onAmountChanged("-1")
-        assertFalse(state.canPlay)
-        vm.onAmountChanged("5.75")
-        assertEquals(Money.usd(575), state.amount)
-        assertTrue(state.canPlay)
+    fun `defaults are khmer female 5 dollars automatic source`() {
+        assertEquals(Language.KHMER, state.language)
+        assertEquals(Gender.FEMALE, state.gender)
+        assertEquals(Currency.USD, state.currency)
+        assertEquals(Money.usd(500), state.amount)
+        assertNull(state.sourceId)
+        assertEquals(engine.sources, state.sources)
+        assertTrue("Play is available without any input", state.canPlay)
     }
 
     @Test
-    fun `invalid amount does not reach any engine`() {
-        vm.onAmountChanged("5.755")
-        vm.onPlayClicked()
-        assertTrue(free.requests.isEmpty())
-        assertTrue(paid.requests.isEmpty())
-    }
-
-    @Test
-    fun `play uses selected language gender and amount`() = runTest {
-        vm.onLanguageSelected(Language.KHMER)
+    fun `play uses selected language gender and preset amount`() = runTest {
+        vm.onLanguageSelected(Language.JAPANESE)
         vm.onGenderSelected(Gender.MALE)
-        vm.onAmountChanged("5.75")
         vm.onPlayClicked()
-        assertEquals(listOf(SpeechRequest(Language.KHMER, Gender.MALE, Money.usd(575))), free.requests)
+        assertEquals(listOf(SpeechRequest(Language.JAPANESE, Gender.MALE, Money.usd(500))), engine.requests)
         assertEquals(PlaybackStatus.Speaking, state.playback)
 
-        free.nextOutcome.complete(SpeechOutcome.Completed())
+        engine.nextOutcome.complete(SpeechOutcome.Completed())
         assertEquals(PlaybackStatus.Success(null), state.playback)
     }
 
     @Test
-    fun `switching mode never triggers speech`() {
-        vm.onAmountChanged("1")
-        vm.onModeSelected(SpeechMode.PAID)
-        vm.onModeSelected(SpeechMode.FREE)
-        vm.onModeSelected(SpeechMode.PAID)
-        assertTrue(free.requests.isEmpty())
-        assertTrue(paid.requests.isEmpty())
-        assertEquals(SpeechMode.PAID, state.mode)
-        assertEquals(PlaybackStatus.Idle(UiMessage(R.string.mode_paid_selected)), state.playback)
+    fun `currency switches the preset without speaking`() {
+        vm.onCurrencySelected(Currency.KHR)
+        assertEquals(Money.khr(20_000), state.amount)
+        assertTrue(engine.requests.isEmpty())
+        vm.onPlayClicked()
+        assertEquals(Money.khr(20_000), engine.requests.single().amount)
     }
 
     @Test
-    fun `play uses the currently selected mode`() {
-        vm.onAmountChanged("2")
-        vm.onModeSelected(SpeechMode.PAID)
+    fun `selecting a source pins it and stops playback`() {
         vm.onPlayClicked()
-        assertEquals(1, paid.requests.size)
-        assertTrue(free.requests.isEmpty())
-    }
+        vm.onSourceSelected("com.google.tts")
+        assertEquals("com.google.tts", state.sourceId)
+        assertEquals("com.google.tts", engine.selectedSources.last())
+        assertEquals(1, engine.cancelledCount)
+        assertTrue(engine.requests.size == 1)
 
-    @Test
-    fun `switching mode while playing stops playback`() {
-        vm.onAmountChanged("2")
-        vm.onPlayClicked()
-        vm.onModeSelected(SpeechMode.PAID)
-        assertEquals(1, free.cancelledCount)
-        assertTrue(free.stopCount > 0)
-        assertTrue(paid.requests.isEmpty())
+        vm.onSourceSelected(null)
+        assertNull(state.sourceId)
+        assertNull(engine.selectedSources.last())
     }
 
     @Test
     fun `rapid repeated play cancels the previous preview`() {
-        vm.onAmountChanged("2")
         vm.onPlayClicked()
-        free.nextOutcome = CompletableDeferred()
+        engine.nextOutcome = CompletableDeferred()
         vm.onPlayClicked()
         vm.onPlayClicked()
-        assertEquals(3, free.requests.size)
-        assertEquals(2, free.cancelledCount)
+        assertEquals(3, engine.requests.size)
+        assertEquals(2, engine.cancelledCount)
     }
 
     @Test
-    fun `unsupported language shows error`() {
-        vm.onLanguageSelected(Language.KHMER)
-        vm.onAmountChanged("3")
+    fun `missing voice shows a settings hint and keeps play available`() {
+        vm.onLanguageSelected(Language.KOREAN)
         vm.onPlayClicked()
-        free.nextOutcome.complete(SpeechOutcome.Failed(SpeechError.LANGUAGE_UNSUPPORTED))
+        engine.nextOutcome.complete(SpeechOutcome.Failed(SpeechError.LANGUAGE_UNSUPPORTED))
         assertEquals(
-            PlaybackStatus.Error(UiMessage(R.string.error_language_unsupported, listOf(R.string.language_khmer))),
+            PlaybackStatus.Error(UiMessage(R.string.error_language_unsupported, listOf(R.string.language_korean))),
             state.playback,
         )
         assertTrue("Play stays available after an error", state.canPlay)
+
+        vm.onPlayClicked()
+        engine.nextOutcome = CompletableDeferred()
+        vm.onPlayClicked()
+        engine.nextOutcome.complete(SpeechOutcome.Failed(SpeechError.LANGUAGE_DATA_MISSING))
+        assertEquals(
+            PlaybackStatus.Error(UiMessage(R.string.error_language_data_missing, listOf(R.string.language_korean))),
+            state.playback,
+        )
     }
 
     @Test
     fun `pitch shifted fallback is reported`() {
-        vm.onLanguageSelected(Language.KHMER)
         vm.onGenderSelected(Gender.MALE)
-        vm.onAmountChanged("3")
         vm.onPlayClicked()
-        free.nextOutcome.complete(SpeechOutcome.Completed(SpeechNotice.GENDER_PITCH_SHIFTED))
+        engine.nextOutcome.complete(SpeechOutcome.Completed(SpeechNotice.GENDER_PITCH_SHIFTED))
         assertEquals(
             PlaybackStatus.Success(
                 UiMessage(
@@ -189,10 +181,10 @@ class ReceiveMoneyViewModelTest {
 
     @Test
     fun `gender fallback is reported`() {
+        vm.onLanguageSelected(Language.ENGLISH)
         vm.onGenderSelected(Gender.MALE)
-        vm.onAmountChanged("3")
         vm.onPlayClicked()
-        free.nextOutcome.complete(SpeechOutcome.Completed(SpeechNotice.GENDER_UNAVAILABLE))
+        engine.nextOutcome.complete(SpeechOutcome.Completed(SpeechNotice.GENDER_UNAVAILABLE))
         assertEquals(
             PlaybackStatus.Success(
                 UiMessage(R.string.notice_gender_unavailable, listOf(R.string.gender_male, R.string.language_english))
@@ -202,80 +194,63 @@ class ReceiveMoneyViewModelTest {
     }
 
     @Test
-    fun `missing azure configuration shows error`() {
-        vm.onModeSelected(SpeechMode.PAID)
-        vm.onAmountChanged("3")
-        vm.onPlayClicked()
-        paid.nextOutcome.complete(SpeechOutcome.Failed(SpeechError.AZURE_NOT_CONFIGURED))
-        assertEquals(PlaybackStatus.Error(UiMessage(R.string.error_azure_not_configured)), state.playback)
-    }
-
-    @Test
     fun `play is disabled while loading`() {
         val slow = object : SpeechEngine {
             val gate = CompletableDeferred<SpeechOutcome>()
             var calls = 0
             override suspend fun speak(request: SpeechRequest, onStarted: () -> Unit): SpeechOutcome {
                 calls++
-                return gate.await() // never calls onStarted: still generating
+                return gate.await() // never calls onStarted: engine still starting
             }
             override fun stop() = Unit
             override fun release() = Unit
         }
-        val vm = ReceiveMoneyViewModel(mapOf(SpeechMode.FREE to free, SpeechMode.PAID to slow))
-        vm.onModeSelected(SpeechMode.PAID)
-        vm.onAmountChanged("3")
+        val vm = ReceiveMoneyViewModel(slow)
         vm.onPlayClicked()
         assertEquals(PlaybackStatus.Loading, vm.uiState.value.playback)
         assertFalse(vm.uiState.value.canPlay)
         vm.onPlayClicked()
-        assertEquals("No duplicate billable request", 1, slow.calls)
+        assertEquals("No duplicate request", 1, slow.calls)
     }
 
     @Test
     fun `selections survive recreation from saved state`() {
         val handle = SavedStateHandle()
-        val first = ReceiveMoneyViewModel(mapOf(SpeechMode.FREE to free, SpeechMode.PAID to paid), handle)
-        first.onLanguageSelected(Language.KHMER)
+        val first = ReceiveMoneyViewModel(engine, handle)
+        first.onSourceSelected("com.google.tts")
+        first.onLanguageSelected(Language.CHINESE)
         first.onGenderSelected(Gender.MALE)
-        first.onModeSelected(SpeechMode.PAID)
-        first.onAmountChanged("5.75")
+        first.onCurrencySelected(Currency.KHR)
 
-        val restored = ReceiveMoneyViewModel(mapOf(SpeechMode.FREE to free, SpeechMode.PAID to paid), handle)
+        val restored = ReceiveMoneyViewModel(engine, handle)
         restored.onPlayClicked()
 
-        assertEquals(SpeechMode.PAID, restored.uiState.value.mode)
-        assertEquals(listOf(SpeechRequest(Language.KHMER, Gender.MALE, Money.usd(575))), paid.requests)
+        assertEquals("com.google.tts", restored.uiState.value.sourceId)
+        assertEquals("com.google.tts", engine.selectedSources.last())
+        assertEquals(listOf(SpeechRequest(Language.CHINESE, Gender.MALE, Money.khr(20_000))), engine.requests)
     }
 
     @Test
-    fun `currency change revalidates amount and is sent to the engine`() {
-        vm.onAmountChanged("5.75")
-        assertTrue(state.canPlay)
-
-        vm.onCurrencySelected(Currency.KHR)
-        assertEquals(AmountError.TOO_MANY_DECIMALS, state.amountError)
-        assertFalse(state.canPlay)
-
-        vm.onAmountChanged("10000")
-        vm.onPlayClicked()
-        assertEquals(Money.khr(10_000), free.requests.single().amount)
+    fun `a saved source that is no longer installed falls back to automatic`() {
+        val handle = SavedStateHandle(mapOf("source" to "com.gone.tts"))
+        val vm = ReceiveMoneyViewModel(engine, handle)
+        assertNull(vm.uiState.value.sourceId)
+        assertNull(engine.selectedSources.last())
     }
 
     @Test
     fun `changing voice prepares it without speaking`() {
-        vm.onAmountChanged("5")
         vm.onGenderSelected(Gender.MALE)
-        vm.onLanguageSelected(Language.KHMER)
-        assertEquals(Language.KHMER to Gender.MALE, free.prepared.last())
-        assertTrue(free.requests.isEmpty())
+        vm.onLanguageSelected(Language.KOREAN)
+        assertEquals(Language.KOREAN to Gender.MALE, engine.prepared.last())
+        assertTrue(engine.requests.isEmpty())
     }
 
     @Test
-    fun `only the selected mode's engine is prepared`() {
-        vm.onModeSelected(SpeechMode.PAID)
-        vm.onGenderSelected(Gender.MALE)
-        assertEquals(Language.ENGLISH to Gender.MALE, paid.prepared.last())
-        assertTrue(paid.requests.isEmpty())
+    fun `stop playback reports stopped and releases on clear`() {
+        vm.onPlayClicked()
+        vm.stopPlayback()
+        assertEquals(PlaybackStatus.Idle(UiMessage(R.string.status_stopped)), state.playback)
+        assertTrue(engine.stopCount > 0)
     }
 }

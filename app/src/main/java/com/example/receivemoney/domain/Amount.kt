@@ -87,3 +87,11 @@ object AmountParser {
 
     private fun invalid(error: AmountError) = AmountParseResult.Invalid(error)
 }
+
+/** The demo announces one fixed amount per currency; there is no amount input. */
+object PresetAmounts {
+    fun forCurrency(currency: Currency): Money = when (currency) {
+        Currency.USD -> Money.usd(500)         // $5
+        Currency.KHR -> Money.khr(20_000)      // ៛20,000
+    }
+}

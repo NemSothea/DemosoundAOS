@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mirrors the sketch, top to bottom: title, Language, Gender, Amount, Play, Free | Paid.
+<!-- Mirrors the Free-tab wireframe, top to bottom: FREE header, Voice source, Language,
+     Voice gender, Amount (fixed preset + currency), Play, status.
      Rows put the label on the left and the control on the right on screens >= 360dp wide
      (values-w360dp/styles.xml); on narrower screens the label sits above the control. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -18,15 +19,51 @@
         android:paddingHorizontal="@dimen/screen_padding"
         android:paddingVertical="@dimen/screen_padding">
 
-        <TextView
-            android:id="@+id/title"
+        <!-- Header: mic icon + FREE -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="@dimen/section_spacing"
             android:gravity="center"
-            android:text="@string/screen_title"
-            android:textAppearance="?attr/textAppearanceHeadlineMedium"
-            android:textColor="?attr/colorOnSurface" />
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="8dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_mic" />
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/screen_title"
+                android:textAppearance="?attr/textAppearanceHeadlineMedium"
+                android:textColor="?attr/colorOnSurface" />
+        </LinearLayout>
+
+        <!-- Voice source / SDK name -->
+        <LinearLayout style="@style/FormRow">
+
+            <TextView
+                android:id="@+id/sourceLabel"
+                style="@style/FormLabel"
+                android:labelFor="@id/sourceDropdown"
+                android:text="@string/label_source" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/sourceLayout"
+                style="@style/FormDropdown">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/sourceDropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/cd_source"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
 
         <!-- Language -->
         <LinearLayout style="@style/FormRow">
@@ -50,128 +87,105 @@
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 
-        <!-- Gender -->
+        <!-- Voice gender: Female | Male -->
         <LinearLayout style="@style/FormRow">
 
             <TextView
                 android:id="@+id/genderLabel"
                 style="@style/FormLabel"
-                android:labelFor="@id/genderDropdown"
+                android:labelFor="@id/genderToggle"
                 android:text="@string/label_gender" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/genderLayout"
-                style="@style/FormDropdown">
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/genderToggle"
+                style="@style/FormControl"
+                app:checkedButton="@id/femaleButton"
+                app:selectionRequired="true"
+                app:singleSelection="true">
 
-                <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                    android:id="@+id/genderDropdown"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:contentDescription="@string/cd_gender"
-                    android:inputType="none" />
-            </com.google.android.material.textfield.TextInputLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/femaleButton"
+                    style="@style/ToggleOption"
+                    android:contentDescription="@string/cd_female"
+                    android:text="@string/gender_female" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/maleButton"
+                    style="@style/ToggleOption"
+                    android:contentDescription="@string/cd_male"
+                    android:text="@string/gender_male" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
         </LinearLayout>
 
-        <!-- Currency -->
-        <LinearLayout style="@style/FormRow">
-
-            <TextView
-                android:id="@+id/currencyLabel"
-                style="@style/FormLabel"
-                android:labelFor="@id/currencyDropdown"
-                android:text="@string/label_currency" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/currencyLayout"
-                style="@style/FormDropdown">
-
-                <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                    android:id="@+id/currencyDropdown"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:contentDescription="@string/cd_currency"
-                    android:inputType="none" />
-            </com.google.android.material.textfield.TextInputLayout>
-        </LinearLayout>
-
-        <!-- Amount -->
+        <!-- Amount: fixed preset for the selected currency. No input. -->
         <LinearLayout style="@style/FormRow">
 
             <TextView
                 android:id="@+id/amountLabel"
                 style="@style/FormLabel"
-                android:labelFor="@id/amountInput"
+                android:labelFor="@id/amountText"
                 android:text="@string/label_amount" />
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/amountLayout"
-                style="@style/FormField"
-                app:helperText="@string/amount_helper_usd"
-                app:placeholderText="@string/amount_hint_usd"
-                app:prefixText="@string/currency_prefix_usd">
+            <LinearLayout
+                style="@style/FormControl"
+                android:orientation="vertical">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/amountInput"
+                <TextView
+                    android:id="@+id/amountText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:digits="0123456789."
-                    android:imeOptions="actionDone"
-                    android:importantForAutofill="no"
-                    android:inputType="numberDecimal"
-                    android:maxLength="13" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:background="@drawable/bg_amount"
+                    android:gravity="center"
+                    android:minHeight="56dp"
+                    android:paddingHorizontal="16dp"
+                    android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                    android:textColor="?attr/colorOnSurface"
+                    tools:text="$5" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/currencyToggle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:checkedButton="@id/usdButton"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/usdButton"
+                        style="@style/ToggleOption"
+                        android:contentDescription="@string/cd_usd"
+                        android:text="@string/currency_usd" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/khrButton"
+                        style="@style/ToggleOption"
+                        android:contentDescription="@string/cd_khr"
+                        android:text="@string/currency_khr" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+            </LinearLayout>
         </LinearLayout>
+
+        <!-- Play sound -->
+        <TextView
+            android:id="@+id/playLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/section_spacing"
+            android:labelFor="@id/playButton"
+            android:text="@string/label_play"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="?attr/colorOnSurface" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/playButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_spacing"
+            android:layout_marginTop="8dp"
             android:contentDescription="@string/cd_play"
             android:minHeight="56dp"
             android:text="@string/action_play"
             app:icon="@drawable/ic_play" />
-
-        <TextView
-            android:id="@+id/modeLabel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_spacing"
-            android:text="@string/label_mode"
-            android:textAppearance="?attr/textAppearanceTitleSmall"
-            android:textColor="?attr/colorOnSurface" />
-
-        <!-- Free and Paid have equal weight; the checked one is filled. -->
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/modeToggle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            app:checkedButton="@id/freeButton"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/freeButton"
-                style="@style/ModeButton"
-                android:contentDescription="@string/cd_free"
-                android:text="@string/action_free" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/paidButton"
-                style="@style/ModeButton"
-                android:contentDescription="@string/cd_paid"
-                android:text="@string/action_paid" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
-
-        <TextView
-            android:id="@+id/modeDescription"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            tools:text="@string/mode_free_description" />
 
         <com.google.android.material.card.MaterialCardView
             style="?attr/materialCardViewOutlinedStyle"

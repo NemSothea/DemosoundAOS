@@ -1,72 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Demo Sound</string>
-    <string name="screen_title">Demo Sound</string>
+    <string name="screen_title">FREE</string>
 
+    <string name="label_source">Voice source / SDK name</string>
     <string name="label_language">Language</string>
-    <string name="label_gender">Gender</string>
+    <string name="label_gender">Voice gender</string>
     <string name="label_amount">Amount</string>
-    <string name="label_mode">Speech engine</string>
+    <string name="label_play">Play sound</string>
+
+    <string name="source_auto">Automatic (recordings, else FreeSDK/Native)</string>
+    <string name="source_custom">Custom recordings</string>
+    <string name="source_native">FreeSDK/Native: %1$s</string>
 
     <string name="language_khmer">Khmer (ខ្មែរ)</string>
     <string name="language_english">English</string>
+    <string name="language_korean">Korean (한국어)</string>
+    <string name="language_japanese">Japanese (日本語)</string>
+    <string name="language_chinese">Chinese (中文)</string>
     <string name="gender_male">Male</string>
     <string name="gender_female">Female</string>
 
-    <string name="label_currency">Currency</string>
     <string name="currency_usd">USD ($)</string>
-    <string name="currency_khr">KHR (៛ Riel)</string>
-    <string name="cd_currency">Currency of the amount</string>
+    <string name="currency_khr">KHR (៛)</string>
     <string name="currency_prefix_usd">$</string>
     <string name="currency_prefix_khr">៛</string>
-    <string name="amount_hint_usd">5.75</string>
-    <string name="amount_hint_khr">10000</string>
-    <string name="amount_helper_usd">US dollars, up to 2 decimal places</string>
-    <string name="amount_helper_khr">Riels, whole numbers only</string>
-    <string name="amount_error_malformed">Enter a plain number, without commas</string>
-    <string name="amount_error_negative">Amount cannot be negative</string>
-    <string name="amount_error_zero">Amount must be greater than zero</string>
-    <string name="amount_error_decimals_usd">Use at most 2 decimal places (cents)</string>
-    <string name="amount_error_decimals_khr">Riel amounts must be whole numbers</string>
-    <string name="amount_error_too_large_usd">Maximum is $1,000,000.00</string>
-    <string name="amount_error_too_large_khr">Maximum is ៛4,000,000,000</string>
 
     <string name="action_play">Play</string>
-    <string name="action_free">Free</string>
-    <string name="action_paid">Paid</string>
 
+    <string name="cd_source">Voice source</string>
     <string name="cd_language">Announcement language</string>
-    <string name="cd_gender">Voice gender</string>
+    <string name="cd_female">Female voice</string>
+    <string name="cd_male">Male voice</string>
+    <string name="cd_usd">US dollars: announces 5 dollars</string>
+    <string name="cd_khr">Khmer riel: announces 20,000 riel</string>
     <string name="cd_play">Play the money received announcement</string>
-    <string name="cd_free">Free mode: Android text to speech</string>
-    <string name="cd_paid">Paid mode: Azure neural voice</string>
     <string name="cd_progress">Preparing speech</string>
 
-    <string name="mode_free_description">Free: Android on-device text-to-speech. Available languages and voices depend on this device.</string>
-    <string name="mode_paid_description">Paid: Azure AI Speech neural voice. Each Play generates new audio and is billed to your Azure Speech resource.</string>
-    <string name="mode_free_selected">Free mode selected. Press Play to preview.</string>
-    <string name="mode_paid_selected">Paid mode selected. Audio is generated only when you press Play.</string>
-
-    <string name="status_ready">Enter an amount and press Play.</string>
+    <string name="status_ready">Press Play to hear the announcement.</string>
     <string name="status_preparing">Preparing speech…</string>
-    <string name="status_generating">Generating Azure neural speech…</string>
     <string name="status_speaking">Speaking…</string>
     <string name="status_success">Announcement played.</string>
     <string name="status_stopped">Playback stopped.</string>
 
-    <string name="notice_gender_pitch_shifted">No %1$s voice for %2$s is installed on this device, so the %3$s voice is played with its pitch adjusted. Paid mode (Azure) has a real %1$s voice.</string>
-    <string name="notice_gender_unavailable">No %1$s voice for %2$s is installed on this device, so the default voice was used. Paid mode (Azure) has male and female voices.</string>
+    <string name="notice_gender_pitch_shifted">No %1$s voice for %2$s is installed on this device, so the %3$s voice is played with its pitch adjusted.</string>
+    <string name="notice_clips_fallback">No custom recording for the %1$s %2$s voice yet, so the phone\'s text-to-speech engine was used.</string>
+    <string name="notice_gender_unavailable">No %1$s voice for %2$s is installed on this device, so the default voice was used.</string>
 
     <string name="error_engine_unavailable">No text-to-speech engine is available on this device. Install or enable one in system settings.</string>
     <string name="error_engine_init_timeout">The text-to-speech engine did not start in time. Try again.</string>
-    <string name="error_language_unsupported">%1$s is not supported by this device\'s text-to-speech engine. Try Paid mode.</string>
-    <string name="error_language_data_missing">%1$s voice data is not installed. Open Settings › General management › Text-to-speech, choose Speech Services by Google › Install voice data, and download %1$s. Or try Paid mode.</string>
-    <string name="error_network">Could not reach Azure Speech. Check the internet connection.</string>
-    <string name="error_azure_not_configured">Paid mode is not configured: add azureSpeechKey and azureSpeechRegion to local.properties and rebuild. See README.</string>
-    <string name="error_azure_auth_failed">Azure rejected the key. Check azureSpeechKey and azureSpeechRegion in local.properties.</string>
-    <string name="error_voice_unavailable">Azure has no %1$s %2$s voice in this region.</string>
-    <string name="error_rate_limited">Too many requests. Wait a moment and try again.</string>
-    <string name="error_invalid_request">Azure Speech rejected the request.</string>
-    <string name="error_server">Azure Speech failed. Try again later.</string>
+    <string name="error_language_unsupported">No %1$s voice is installed on this device. Open Settings › Text-to-speech, choose an engine such as Speech Services by Google, and install the %1$s voice.</string>
+    <string name="error_language_data_missing">%1$s voice data is not installed. Open Settings › Text-to-speech › Speech Services by Google › Install voice data, and download %1$s.</string>
+    <string name="error_clip_missing">No custom recording for the %1$s %2$s voice. Add the WAV files under assets/voice (see docs/RECORDING_SCRIPT.md).</string>
+    <string name="status_generating_clips">Generating placeholder clips… %1$s</string>
     <string name="error_playback">The audio could not be played.</string>
 </resources>

@@ -18,13 +18,13 @@
         <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
-    <style name="FormField" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+    <style name="FormDropdown" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
     </style>
 
-    <style name="FormDropdown" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+    <style name="FormControl">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>

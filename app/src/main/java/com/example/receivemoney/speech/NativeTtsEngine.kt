@@ -22,11 +22,12 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
- * Free mode: the device's built-in TextToSpeech engines. Must be created and used on the main thread.
+ * FreeSDK/Native: the device's built-in TextToSpeech engines. Must be created and used on the main thread.
  *
- * The system default engine is tried first. If it cannot speak the requested language (e.g. Samsung TTS
- * has no Khmer), the other installed engines are asked in turn (e.g. Google Speech Services, which offers
- * Khmer). An engine is only used when it reports the language as available.
+ * Automatic source (the default): the system default engine is tried first. If it cannot speak the
+ * requested language (e.g. Samsung TTS has no Khmer), the other installed engines are asked in turn
+ * (e.g. Google Speech Services, which offers Khmer). An engine is only used when it reports the
+ * language as available. When the user pins a source with [selectSource], only that engine is used.
  */
 class NativeTtsEngine(context: Context) : SpeechEngine {
 
@@ -47,6 +48,10 @@ class NativeTtsEngine(context: Context) : SpeechEngine {
 
     private val appContext = context.applicationContext
     private val pending = ConcurrentHashMap<String, Pending>()
+
+    /** Package name of the engine pinned by the user, or null for automatic selection. */
+    @Volatile
+    private var pinnedSource: String? = null
 
     /** Engines keyed by package name; [DEFAULT_ENGINE] is the system default. Created lazily. */
     private val engines = mutableMapOf<String, Engine>()
@@ -77,6 +82,17 @@ class NativeTtsEngine(context: Context) : SpeechEngine {
 
     private fun otherEnginePackages(default: Engine): List<String> =
         default.tts.engines.map { it.name }.filter { it != default.tts.defaultEngine }
+
+    override fun sources(): List<VoiceSource> {
+        val default = engine(DEFAULT_ENGINE)
+        return default.tts.engines
+            .sortedByDescending { it.name == default.tts.defaultEngine }
+            .map { VoiceSource(it.name, it.label) }
+    }
+
+    override fun selectSource(sourceId: String?) {
+        pinnedSource = sourceId
+    }
 
     private fun engine(packageName: String): Engine = engines.getOrPut(packageName) {
         val initialized = CompletableDeferred<Boolean>()
@@ -189,6 +205,26 @@ class NativeTtsEngine(context: Context) : SpeechEngine {
         }
     }
 
+    /**
+     * Synthesizes [text] with the voice chosen for [language]/[gender] into [file] (WAV), without
+     * playing it. Used to generate placeholder clips for [ClipEngine]. Returns false on failure.
+     */
+    suspend fun synthesizeToFile(language: Language, gender: Gender, text: String, file: File): Boolean {
+        val tts = when (val resolution = resolve(language, gender)) {
+            is Resolution.Ready -> resolution.tts
+            is Resolution.Failed -> return false
+        }
+        val utteranceId = "clip-${UUID.randomUUID()}"
+        val result = suspendCancellableCoroutine { cont ->
+            pending[utteranceId] = Pending(cont) {}
+            cont.invokeOnCancellation { pending.remove(utteranceId); tts.stop() }
+            if (tts.synthesizeToFile(text, Bundle(), file, utteranceId) != TextToSpeech.SUCCESS) {
+                finish(utteranceId, UtteranceResult.ERROR)
+            }
+        }
+        return result == UtteranceResult.DONE
+    }
+
     private sealed interface EngineChoice {
         /** [voice] is null when no engine has a voice of the requested gender for the language. */
         class Found(val engine: Engine, val voice: Voice?) : EngineChoice
@@ -197,7 +233,8 @@ class NativeTtsEngine(context: Context) : SpeechEngine {
     }
 
     /**
-     * Picks the engine and voice. Engines that support [locale] are considered in order (default first).
+     * Picks the engine and voice. With a pinned source only that engine is considered; otherwise
+     * engines that support [locale] are considered in order (default first).
      *  1. Prefer an engine that has both a male and a female voice, so switching gender keeps the same
      *     engine and the same voice style.
      *  2. Otherwise, the first engine with a voice of [gender].
@@ -215,10 +252,16 @@ class NativeTtsEngine(context: Context) : SpeechEngine {
             }
         }
 
-        consider(default)
-        for (packageName in otherEnginePackages(default)) {
-            val candidate = engine(packageName)
-            if (candidate.awaitReady() == true) consider(candidate)
+        val pinned = pinnedSource
+        if (pinned != null) {
+            val candidate = if (pinned == default.tts.defaultEngine) default else engine(pinned)
+            if (candidate === default || candidate.awaitReady() == true) consider(candidate)
+        } else {
+            consider(default)
+            for (packageName in otherEnginePackages(default)) {
+                val candidate = engine(packageName)
+                if (candidate.awaitReady() == true) consider(candidate)
+            }
         }
         if (supporting.isEmpty()) return if (dataMissing) EngineChoice.DataMissing else EngineChoice.Unsupported
 
