@@ -123,8 +123,9 @@ Manual device checks: `docs/MANUAL_TEST_CHECKLIST.md`.
 3. Rebuild. Nothing else changes.
 
 The bundled clips were generated with `tools/gen_clips.py`, which speaks every row of
-`docs/RECORDING_SCRIPT.md` with a Microsoft neural voice (`edge-tts`, no API key) and converts the
-result with ffmpeg. The app stays offline; the script runs once on a dev machine. To regenerate:
+`docs/RECORDING_SCRIPT.md` with a Microsoft neural voice (`edge-tts`, no API key), converts the
+result with ffmpeg and normalises each clip to −16 dBFS RMS (peaks capped at −1 dBFS) so words
+sit at one level. The app stays offline; the script runs once on a dev machine. To regenerate:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r tools/requirements.txt   # needs ffmpeg on PATH
 .venv/bin/python tools/gen_clips.py                 # all languages; --lang km-KH --gender female for one set

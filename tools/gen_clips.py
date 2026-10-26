@@ -12,14 +12,18 @@ the Edge "Read aloud" service without a licence for product use.
     python3 tools/gen_clips.py                      # everything
     python3 tools/gen_clips.py --lang km-KH --gender female
     python3 tools/gen_clips.py --token 5 --token dollar --dry-run
+    python3 tools/gen_clips.py --no-normalize     # keep each voice's own loudness
 """
 
 import argparse
+import array
 import asyncio
+import math
 import re
 import subprocess
 import sys
 import tempfile
+import wave
 from pathlib import Path
 
 try:
@@ -42,6 +46,14 @@ SAMPLE_RATE = 24000
 CONCURRENCY = 4
 RETRIES = 3
 
+# Loudness: every clip is scaled so the RMS of its non-silent part hits TARGET_RMS_DBFS, capped so
+# no peak exceeds PEAK_DBFS. Neural voices differ by 10-15 dB between words otherwise, and a joined
+# sentence then jumps in volume. SILENCE matches PcmClipJoiner.SILENCE_THRESHOLD.
+TARGET_RMS_DBFS = -16.0
+PEAK_DBFS = -1.0
+SILENCE = 300
+NORMALIZE = True
+
 HEADING = re.compile(r"^## .*assets/voice/([a-z]{2}-[A-Z]{2})/")
 ROW = re.compile(r"^\|\s*`([^`]+)\.wav`\s*\|\s*(.+?)\s*\|$")
 
@@ -57,6 +69,28 @@ def read_script(path: Path) -> dict[str, dict[str, str]]:
         elif tag and (m := ROW.match(line)):
             words[tag][m.group(1)] = m.group(2)
     return words
+
+
+def normalize(path: Path) -> float:
+    """Scales the 16-bit mono WAV at [path] in place. Returns the gain applied, in dB."""
+    with wave.open(str(path), "rb") as w:
+        params = w.getparams()
+        samples = array.array("h", w.readframes(w.getnframes()))
+    if sys.byteorder == "big":
+        samples.byteswap()
+    loud = [s for s in samples if abs(s) > SILENCE]
+    if not loud:
+        return 0.0
+    rms = math.sqrt(sum(s * s for s in loud) / len(loud))
+    peak = max(abs(s) for s in samples)
+    gain = min(10 ** (TARGET_RMS_DBFS / 20) * 32768 / rms, 10 ** (PEAK_DBFS / 20) * 32767 / peak)
+    scaled = array.array("h", (max(-32768, min(32767, round(s * gain))) for s in samples))
+    if sys.byteorder == "big":
+        scaled.byteswap()
+    with wave.open(str(path), "wb") as w:
+        w.setparams(params)
+        w.writeframes(scaled.tobytes())
+    return 20 * math.log10(gain)
 
 
 async def synthesize(voice: str, text: str, out: Path, semaphore: asyncio.Semaphore) -> None:
@@ -79,6 +113,8 @@ async def synthesize(voice: str, text: str, out: Path, semaphore: asyncio.Semaph
              "-ac", "1", "-ar", str(SAMPLE_RATE), "-sample_fmt", "s16", str(out)],
             check=True,
         )
+        if NORMALIZE:
+            normalize(out)
     finally:
         mp3.unlink(missing_ok=True)
 
@@ -90,7 +126,10 @@ async def main() -> int:
     ap.add_argument("--token", action="append", help="only this token id; repeatable")
     ap.add_argument("--out", type=Path, default=ASSETS, help=f"output root (default {ASSETS.relative_to(ROOT)})")
     ap.add_argument("--dry-run", action="store_true", help="list what would be generated")
+    ap.add_argument("--no-normalize", action="store_true", help=f"keep the engine's own level (default: RMS {TARGET_RMS_DBFS} dBFS)")
     args = ap.parse_args()
+    global NORMALIZE
+    NORMALIZE = not args.no_normalize
 
     words = read_script(SCRIPT)
     missing = sorted(set(VOICES) - set(words))

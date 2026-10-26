@@ -177,11 +177,12 @@ The app has no volume control. What you hear is:
 
 1. **Device media volume** – both `ClipEngine` and `NativeTtsEngine` use `USAGE_MEDIA`, the
    same slider as music. A fresh emulator defaults to 5/15, which sounds quiet.
-2. **Loudness baked into each WAV.** Measured on the current clips (RMS of the non-silent part):
-   Khmer and English sets are even (about −20 to −15 dBFS). The Korean, Japanese and Chinese
-   **male** sets vary by 10–15 dB between words (e.g. Korean `2.wav` at −30 dBFS vs `dollar.wav`
-   at −16 dBFS), so those sentences jump in level. Peaks are at −2 to −6 dBFS; nothing clips.
-   Loudness normalisation in `gen_clips.py` is the planned fix (section 7).
+2. **Loudness baked into each WAV.** `gen_clips.py` normalises every clip: the RMS of the
+   non-silent part is scaled to −16 dBFS, capped so no peak exceeds −1 dBFS (`--no-normalize`
+   keeps the engine's level). Before this, the Korean, Japanese and Chinese male sets varied by
+   10–15 dB between words (Korean `2.wav` at −30 dBFS vs `dollar.wav` at −16 dBFS). After, every
+   set sits within about 2 dB (−19 to −16 dBFS); the few words below −16 are peak-limited, since
+   a louder gain would clip them.
 3. **Native TTS output level** is decided by the engine; `KEY_PARAM_VOLUME` can only lower it.
 4. On the emulator, the Mac's output volume and output device as well.
 
@@ -262,6 +263,7 @@ ClipEngine: playing prefix 5 dollar (1940 ms @ 24000 Hz)
 | Google Android TTS, per word (`PlaceholderClipGenerator`) | Works on any phone, robotic Khmer, 300–500 ms dead air between words | Kept as fallback tool only |
 | Silence trimming + edge fades in `PcmClipJoiner` | Sentence 2.9 s → 2.2 s, no clicks, far less choppy | Shipped |
 | Microsoft neural voices via `edge-tts`, per word | Clearly more natural than Google TTS; all 10 voices available | **Shipped** (current clips) |
+| Loudness normalisation in `gen_clips.py` | Word-to-word spread 15 dB → about 2 dB, no clipping | Shipped |
 | `edge-tts` whole sentence | Best intonation, but needs network at runtime, so not usable in the app; serves as the quality ceiling | Reference only |
 | Zio TTS (open Khmer VITS, 23 voices, offline ONNX, CC BY-SA) | All auditioned voices judged worse than edge-tts | Rejected |
 | Meta MMS Khmer, Piper, Kokoro | MMS Khmer is below edge-tts; Piper and Kokoro have no Khmer | Not pursued |
@@ -271,16 +273,14 @@ human recording.
 
 ## 7. Open items
 
-1. **Loudness normalisation in `gen_clips.py`** – target RMS about −16 dBFS, peak limit −1 dBFS,
-   so every word sits at the same level (fixes the male Korean/Japanese/Chinese jumps). Also helps
-   future human recordings.
-2. **Real recordings** for Khmer first (29 words × 2 genders, about 15 minutes with a phone mic).
-3. **Rate/pitch tuning** of edge-tts voices (`--rate`, `--pitch`) if a language sounds too fast.
-4. **On-device neural TTS** (sherpa-onnx) for whole-sentence intonation offline. Large change:
+1. **Real recordings** for Khmer first (29 words × 2 genders, about 15 minutes with a phone mic).
+   Run them through the same normalisation (`normalize()` in `gen_clips.py`) so they match.
+2. **Rate/pitch tuning** of edge-tts voices (`--rate`, `--pitch`) if a language sounds too fast.
+3. **On-device neural TTS** (sherpa-onnx) for whole-sentence intonation offline. Large change:
    native library plus a 30–100 MB model per language, and no Khmer model that sounds acceptable
    yet. Not planned.
-5. **Delete the Azure dead code** when convenient.
-6. **Git LFS for `*.wav`** if the repo grows from repeated regeneration.
+4. **Delete the Azure dead code** when convenient.
+5. **Git LFS for `*.wav`** if the repo grows from repeated regeneration.
 
 ## 8. Glossary
 
