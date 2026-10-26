@@ -131,6 +131,27 @@ Microsoft neural voice through the `edge-tts` Python package (no API key), conve
 and writes the WAVs into the assets folder. It runs once on a developer machine; the app stays
 offline.
 
+**Words are cut from carrier sentences, not spoken alone.** A word spoken on its own gets a
+falling "end of sentence" tone, and a sentence stitched from such words sounds like a list. So
+the script speaks each word inside a short sentence that puts it in its real position, asks
+edge-tts for word boundaries (`boundary="WordBoundary"`, start and duration per word), and cuts
+the word out with a 60 ms margin bounded by its neighbours and a 5 ms fade:
+
+| Token kind | Carrier (Khmer example) | Cut |
+|---|---|---|
+| prefix / suffix | ទទួលបាន ប្រាំ ដុល្លារ | the prefix |
+| digit or number word | ទទួលបាន **ប្រាំ** ដុល្លារ | the number |
+| scale word (100, 1000, 10000, …) | ទទួលបាន ពីរ **រយ** ដុល្លារ | the scale word, after "two" |
+| currency word | ទទួលបាន ប្រាំ **រៀល** | the currency |
+| and / point | ទទួលបាន ប្រាំ ដុល្លារ **និង** ម្ភៃ សេន | the connector |
+
+Korean and Japanese carriers are `number currency suffix`; Chinese 两 (`2b`) is spoken before 万.
+The `CARRIERS` table in the script holds the slot words per language. If a word cannot be
+located among the returned boundaries the script falls back to speaking it alone and says so;
+on the current word list every clip in all 10 sets is found. `--isolated` restores the old
+behaviour. Clips came out 30–40 % shorter than the isolated ones, since mid-sentence words are
+spoken faster.
+
 | Language | Female | Male |
 |---|---|---|
 | Khmer | `km-KH-SreymomNeural` | `km-KH-PisethNeural` |
@@ -241,7 +262,8 @@ ClipEngine: playing prefix 5 dollar (1940 ms @ 24000 Hz)
 
 * **Stitched words, not whole sentences.** One clip per token means any amount works once the
   word set exists, and the recording script stays short (19–39 words per language). The cost is
-  a slight list-reading cadence, because each word is spoken alone.
+  a slight list-reading cadence; cutting generated words from carrier sentences (section 3.2)
+  removes most of it, and a human speaker should likewise record each word inside a sentence.
 * **Trim at load, not in the files.** Recordings and generated clips both carry padding;
   trimming in `ClipEngine` keeps the asset files untouched and makes the gap predictable.
 * **Automatic falls back, Custom does not.** Reviewers want to hear the recordings when they
@@ -264,6 +286,8 @@ ClipEngine: playing prefix 5 dollar (1940 ms @ 24000 Hz)
 | Silence trimming + edge fades in `PcmClipJoiner` | Sentence 2.9 s → 2.2 s, no clicks, far less choppy | Shipped |
 | Microsoft neural voices via `edge-tts`, per word | Clearly more natural than Google TTS; all 10 voices available | **Shipped** (current clips) |
 | Loudness normalisation in `gen_clips.py` | Word-to-word spread 15 dB → about 2 dB, no clipping | Shipped |
+| Cut words from carrier sentences via edge-tts word boundaries | Mid-sentence tone per word; judged clearly better than isolated words, close to the whole-sentence ceiling | **Shipped** (current clips) |
+| Comma-separated sentence split on silence | Khmer voice inserts no pause at commas; could not split | Rejected |
 | `edge-tts` whole sentence | Best intonation, but needs network at runtime, so not usable in the app; serves as the quality ceiling | Reference only |
 | Zio TTS (open Khmer VITS, 23 voices, offline ONNX, CC BY-SA) | All auditioned voices judged worse than edge-tts | Rejected |
 | Meta MMS Khmer, Piper, Kokoro | MMS Khmer is below edge-tts; Piper and Kokoro have no Khmer | Not pursued |
