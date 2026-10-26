@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DemoSound" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#8AD6B4</item>
+        <item name="colorOnPrimary">#003825</item>
+        <item name="colorPrimaryContainer">#005138</item>
+        <item name="colorOnPrimaryContainer">#A6F2CF</item>
+        <item name="colorSecondary">#B3CCBF</item>
+    </style>
+</resources>
