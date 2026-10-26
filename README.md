@@ -5,8 +5,8 @@ A small Android demo that speaks an incoming-money announcement, for a bank-styl
 
 * **Custom recordings** – one short WAV clip per word (digits, scale words, currency, phrase),
   bundled in the APK and joined at play time into the sentence. This is where a real recorded
-  voice goes. The clips shipped today are **placeholders** generated from the phone's engine; see
-  `docs/RECORDING_SCRIPT.md` for the list to record.
+  voice goes. The clips shipped today are **stand-ins** generated with neural voices by
+  `tools/gen_clips.py` (section 6); see `docs/RECORDING_SCRIPT.md` for the list to record.
 * **FreeSDK/Native** – the device's built-in text-to-speech engines, used automatically when a
   recording is missing, or when pinned in the Voice source dropdown.
 
@@ -63,14 +63,16 @@ app/                                   Android app (Kotlin, XML + ViewBinding, M
     speech/CompositeSpeechEngine.kt    Routes to recordings or the device engine
     speech/ClipEngine.kt               Plays joined clips from assets/voice via AudioTrack
     speech/NativeTtsEngine.kt          Android TextToSpeech, multi-engine, pinnable source
-    speech/PlaceholderClipGenerator.kt Developer tool: synthesizes placeholder clips
-  src/main/assets/voice/<tag>/<gender>/<token>.wav   Voice clips (placeholders today)
+    speech/PlaceholderClipGenerator.kt Developer tool: synthesizes placeholder clips with the phone's TTS
     speech/VoiceGenderMatcher.kt       Determines a TTS voice's gender (labels, Samsung, curated Google list)
+  src/main/assets/voice/<tag>/<gender>/<token>.wav   Voice clips (generated stand-ins today)
   src/main/res/layout/activity_main.xml
   src/main/res/values-w360dp/styles.xml  Side-by-side label/control rows on ≥360dp screens
   src/test/…                           JVM unit tests
+docs/PROJECT_GUIDE.md                  Full guide: architecture, clip pipeline, volume, what was tried, open items
 docs/MANUAL_TEST_CHECKLIST.md
 docs/RECORDING_SCRIPT.md               Every clip to record, per language and gender
+tools/gen_clips.py                     Generates all clips from the recording script with edge-tts neural voices
 ```
 
 Left over from an earlier Paid (Azure) mode and no longer referenced by the app:
